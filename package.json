@@ -1,0 +1,67 @@
+{
+  "name": "reduce-app-size-flutter",
+  "displayName": "Reduce App Size Flutter",
+  "description": "Detects unused classes and assets in your Flutter project.",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "deadCode-sidebar",
+          "title": "Reduce App Size Flutter",
+          "icon": "resources/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "deadCode-sidebar": [
+        {
+          "id": "deadCodeView",
+          "name": "Dead Code",
+          "icon": "resources/icon.svg",
+          "contextualTitle": "Reduce App Size Flutter"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "deadCodeView.refresh",
+        "title": "Reduce App Size Flutter: Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "deadCode.openFile",
+        "title": "Reduce App Size Flutter: Open File"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "deadCodeView.refresh",
+          "when": "view == deadCodeView",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "lint": "eslint src"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0"
+  }
+}

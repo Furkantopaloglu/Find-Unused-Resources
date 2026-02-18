@@ -1,0 +1,10 @@
+name: reduce_app_size_flutter_cli
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.10.8
+
+dependencies:
+  analyzer: ^7.4.5
+  path: ^1.9.0

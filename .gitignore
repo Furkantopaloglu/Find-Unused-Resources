@@ -1,0 +1,22 @@
+# Node.js / VS Code Extension
+node_modules/
+out/
+*.vsix
+
+# TypeScript incremental compilation cache
+*.tsbuildinfo
+
+# Dart / Flutter CLI tool
+dart_cli/.dart_tool/
+dart_cli/.packages
+dart_cli/build/
+dart_cli/pubspec.lock
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/settings.json
+.vscode/launch.json
+.vscode/*.code-workspace
