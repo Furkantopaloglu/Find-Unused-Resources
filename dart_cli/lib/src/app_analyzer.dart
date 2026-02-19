@@ -4,6 +4,7 @@ import 'package:analyzer/dart/analysis/utilities.dart';
 import 'package:path/path.dart' as p;
 
 import 'analyzers/unused_asset_analyzer.dart';
+import 'analyzers/unused_package_analyzer.dart';
 import 'models/class_info.dart';
 import 'models/method_info.dart';
 import 'utils/file_utils.dart';
@@ -26,6 +27,7 @@ Future<Map<String, Object>> analyzeProject(String rootPath) async {
     return {
       'unused_classes': <Object>[],
       'unused_methods': <Object>[],
+      'unused_packages': <Object>[],
       'unused_assets': <Object>[],
     };
   }
@@ -107,6 +109,7 @@ Future<Map<String, Object>> analyzeProject(String rootPath) async {
   return {
     'unused_classes': unusedClasses,
     'unused_methods': unusedMethods,
+    'unused_packages': await findUnusedPackages(rootPath, dartFiles),
     'unused_assets': await findUnusedAssets(rootPath, dartFiles),
   };
 }
