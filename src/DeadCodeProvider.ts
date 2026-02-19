@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { exec } from "child_process";
 import * as path from "path";
 import * as fs from "fs";
-import { DartAnalysisResult, DeadCodeItem, UnusedMethod } from "./types";
+import { DartAnalysisResult, DeadCodeItem, UnusedMethod, UnusedPackage } from "./types";
 import { DeadCodeTreeItem } from "./DeadCodeTreeItem";
 
 // -----------------------------------------------------------------------
@@ -21,6 +21,7 @@ export class DeadCodeProvider
   private _result: DartAnalysisResult = {
     unused_classes: [],
     unused_methods: [],
+    unused_packages: [],
     unused_assets: [],
   };
 
@@ -108,15 +109,16 @@ export class DeadCodeProvider
               const raw = stdout.slice(jsonStart, jsonEnd + 1);
               const parsed = JSON.parse(raw) as Partial<DartAnalysisResult>;
               this._result = {
-                unused_classes: Array.isArray(parsed.unused_classes) ? parsed.unused_classes : [],
-                unused_methods: Array.isArray(parsed.unused_methods) ? parsed.unused_methods : [],
-                unused_assets:  Array.isArray(parsed.unused_assets)  ? parsed.unused_assets  : [],
+                unused_classes:  Array.isArray(parsed.unused_classes)  ? parsed.unused_classes  : [],
+                unused_methods:  Array.isArray(parsed.unused_methods)  ? parsed.unused_methods  : [],
+                unused_packages: Array.isArray(parsed.unused_packages) ? parsed.unused_packages : [],
+                unused_assets:   Array.isArray(parsed.unused_assets)   ? parsed.unused_assets   : [],
               };
             } catch (parseErr) {
               vscode.window.showErrorMessage(
                 "Reduce App Size Flutter: Could not parse analysis output.\n" + String(parseErr)
               );
-              this._result = { unused_classes: [], unused_methods: [], unused_assets: [] };
+              this._result = { unused_classes: [], unused_methods: [], unused_packages: [], unused_assets: [] };
               this._setState(this._hasAnalyzed ? "done" : "idle");
               this._onDidChangeTreeData.fire();
               resolve();
@@ -130,20 +132,22 @@ export class DeadCodeProvider
             this._onDidChangeTreeData.fire();
 
             // 7. Show a friendly summary notification
-            const classCount  = this._result.unused_classes.length;
-            const methodCount = this._result.unused_methods.length;
-            const assetCount  = this._result.unused_assets.length;
-            const total = classCount + methodCount + assetCount;
+            const classCount   = this._result.unused_classes.length;
+            const methodCount  = this._result.unused_methods.length;
+            const packageCount = this._result.unused_packages.length;
+            const assetCount   = this._result.unused_assets.length;
+            const total = classCount + methodCount + packageCount + assetCount;
 
             if (total === 0) {
               vscode.window.showInformationMessage(
-                "Reduce App Size Flutter: No unused code or assets found. Your project looks clean! 🎉"
+                "Reduce App Size Flutter: No unused code, packages or assets found. Your project looks clean! 🎉"
               );
             } else {
               const parts: string[] = [];
-              if (classCount  > 0) { parts.push(`${classCount} unused class${classCount  > 1 ? "es" : ""}`); }
-              if (methodCount > 0) { parts.push(`${methodCount} unused method${methodCount > 1 ? "s" : ""}`); }
-              if (assetCount  > 0) { parts.push(`${assetCount} unused asset${assetCount  > 1 ? "s" : ""}`); }
+              if (classCount   > 0) { parts.push(`${classCount} unused class${classCount   > 1 ? "es" : ""}`); }
+              if (methodCount  > 0) { parts.push(`${methodCount} unused method${methodCount  > 1 ? "s" : ""}`); }
+              if (packageCount > 0) { parts.push(`${packageCount} unused package${packageCount > 1 ? "s" : ""}`); }
+              if (assetCount   > 0) { parts.push(`${assetCount} unused asset${assetCount   > 1 ? "s" : ""}`); }
               vscode.window.showWarningMessage(
                 `Reduce App Size Flutter: Analysis complete — ${parts.join(", ")} found.`
               );
@@ -169,10 +173,11 @@ export class DeadCodeProvider
         return [];
       }
 
-      // Root level: three fixed groups
-      const classCount  = this._result.unused_classes?.length  ?? 0;
-      const methodCount = this._result.unused_methods?.length  ?? 0;
-      const assetCount  = this._result.unused_assets?.length   ?? 0;
+      // Root level: four fixed groups
+      const classCount   = this._result.unused_classes?.length   ?? 0;
+      const methodCount  = this._result.unused_methods?.length   ?? 0;
+      const packageCount = this._result.unused_packages?.length  ?? 0;
+      const assetCount   = this._result.unused_assets?.length    ?? 0;
 
       const groups: DeadCodeItem[] = [
         {
@@ -184,6 +189,11 @@ export class DeadCodeProvider
           label: "Unused Methods",
           kind: "group",
           description: `${methodCount} item`,
+        },
+        {
+          label: "Unused Packages",
+          kind: "group",
+          description: `${packageCount} item`,
         },
         {
           label: "Unused Assets",
@@ -222,6 +232,21 @@ export class DeadCodeProvider
           tooltip: `${method.name}\n${method.file} — line ${method.line}`,
           file: method.file,
           line: method.line,
+        };
+        return new DeadCodeTreeItem(item, vscode.TreeItemCollapsibleState.None);
+      });
+    }
+
+    if (element.data.label === "Unused Packages") {
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
+      return (this._result.unused_packages ?? []).map((pkg: UnusedPackage) => {
+        const item: DeadCodeItem = {
+          label: pkg.name,
+          kind: "package",
+          description: "pubspec.yaml",
+          tooltip: `${pkg.name} — declared in pubspec.yaml but never imported\nClick to open pubspec.yaml`,
+          file: path.join(workspaceRoot, "pubspec.yaml"),
+          line: pkg.line ?? 1,
         };
         return new DeadCodeTreeItem(item, vscode.TreeItemCollapsibleState.None);
       });

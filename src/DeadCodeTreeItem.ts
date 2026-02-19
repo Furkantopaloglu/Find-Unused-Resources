@@ -13,7 +13,7 @@ export class DeadCodeTreeItem extends vscode.TreeItem {
     this.contextValue = data.kind;
 
     // Open file on click for code/asset items
-    if ((data.kind === "class" || data.kind === "method" || data.kind === "asset") && data.file) {
+    if ((data.kind === "class" || data.kind === "method" || data.kind === "asset" || data.kind === "package") && data.file) {
       this.command = {
         command: "deadCode.openFile",
         title: "Open File",
@@ -35,6 +35,12 @@ export class DeadCodeTreeItem extends vscode.TreeItem {
         this.iconPath = new vscode.ThemeIcon(
           "symbol-method",
           new vscode.ThemeColor("symbolIcon.methodForeground")
+        );
+        break;
+      case "package":
+        this.iconPath = new vscode.ThemeIcon(
+          "package",
+          new vscode.ThemeColor("symbolIcon.namespaceForeground")
         );
         break;
       case "asset":

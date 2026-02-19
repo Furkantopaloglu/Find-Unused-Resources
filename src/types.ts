@@ -18,9 +18,15 @@ export interface UnusedMethod {
   line: number;
 }
 
+export interface UnusedPackage {
+  name: string;
+  line: number;
+}
+
 export interface DartAnalysisResult {
   unused_classes: UnusedClass[];
   unused_methods: UnusedMethod[];
+  unused_packages: UnusedPackage[];
   unused_assets: UnusedAsset[];
 }
 
@@ -28,7 +34,7 @@ export interface DartAnalysisResult {
 // Tree item types
 // -----------------------------------------------------------------------
 
-export type ItemKind = "group" | "class" | "method" | "asset";
+export type ItemKind = "group" | "class" | "method" | "package" | "asset";
 
 export interface DeadCodeItem {
   label: string;

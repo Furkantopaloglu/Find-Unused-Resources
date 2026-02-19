@@ -27,7 +27,7 @@ Future<void> main(List<String> args) async {
     stderr.writeln('lib/ directory not found in: $rootPath');
     stderr.writeln('Make sure the target directory is a Flutter/Dart project.');
     stdout.writeln(
-      '{"unused_classes":[],"unused_methods":[],"unused_assets":[]}',
+      '{"unused_classes":[],"unused_methods":[],"unused_packages":[],"unused_assets":[]}',
     );
     return;
   }
