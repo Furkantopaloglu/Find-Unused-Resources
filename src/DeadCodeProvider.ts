@@ -24,8 +24,18 @@ export class DeadCodeProvider
     unused_assets: [],
   };
 
+  /** True once the first analysis has completed */
+  private _hasAnalyzed = false;
+
   /** The provider needs the running extension's context (for asAbsolutePath) */
-  constructor(private readonly context: vscode.ExtensionContext) {}
+  constructor(private readonly context: vscode.ExtensionContext) {
+    this._setState("idle");
+  }
+
+  /** Updates the VS Code context key that drives viewsWelcome content */
+  private _setState(state: "idle" | "analyzing" | "done"): void {
+    vscode.commands.executeCommand("setContext", "reduceAppSize.state", state);
+  }
 
   // ---- Public API -------------------------------------------------------
 
@@ -38,7 +48,7 @@ export class DeadCodeProvider
     const folders = vscode.workspace.workspaceFolders;
     if (!folders || folders.length === 0) {
       vscode.window.showWarningMessage(
-        "Reduce App Size Flutter: A project folder must be open for analysis."
+        "Reduce App Size Flutter: Please open a Flutter project folder first."
       );
       return;
     }
@@ -54,36 +64,41 @@ export class DeadCodeProvider
       return;
     }
 
-    // 3. Run the Dart CLI; show progress to the user
+    // 3. Switch to loading state — triggers viewsWelcome spinner
+    this._setState("analyzing");
+    this._onDidChangeTreeData.fire();
+
+    // 4. Run the Dart CLI; show a visible progress notification
     await vscode.window.withProgress(
       {
-        location: vscode.ProgressLocation.Window,
-        title: "Analyzing Reduce App Size Flutter…",
+        location: vscode.ProgressLocation.Notification,
+        title: "Reduce App Size Flutter",
         cancellable: false,
       },
-      () =>
-        new Promise<void>((resolve) => {
+      (progress) => {
+        progress.report({ message: "Scanning your Flutter project…" });
+
+        return new Promise<void>((resolve) => {
           const cmd = `dart run "${scriptPath}" "${projectPath}"`;
 
           exec(cmd, { cwd: cliRoot }, (error, stdout, stderr) => {
             if (error) {
-              // Show stderr if the Dart process returned an error
               const msg = stderr?.trim() || error.message;
               vscode.window.showErrorMessage(
-                `Reduce App Size Flutter error: ${msg}`
+                `Reduce App Size Flutter: Analysis failed.\n${msg}`
               );
+              this._setState(this._hasAnalyzed ? "done" : "idle");
+              this._onDidChangeTreeData.fire();
               resolve();
               return;
             }
 
             if (stderr?.trim()) {
-              // Non-fatal warnings (lint, etc.)
               console.warn("[Reduce App Size Flutter] stderr:", stderr);
             }
 
-            // 4. Parse stdout
-            // `dart run` sometimes writes build messages before the JSON;
-            // we slice from the first '{' to the last '}' to extract only the JSON block.
+            // 5. Parse stdout
+            // `dart run` sometimes prepends build messages; extract only the JSON block.
             try {
               const jsonStart = stdout.indexOf("{");
               const jsonEnd = stdout.lastIndexOf("}");
@@ -92,7 +107,6 @@ export class DeadCodeProvider
               }
               const raw = stdout.slice(jsonStart, jsonEnd + 1);
               const parsed = JSON.parse(raw) as Partial<DartAnalysisResult>;
-              // Normalize missing/null fields to empty arrays
               this._result = {
                 unused_classes: Array.isArray(parsed.unused_classes) ? parsed.unused_classes : [],
                 unused_methods: Array.isArray(parsed.unused_methods) ? parsed.unused_methods : [],
@@ -100,17 +114,45 @@ export class DeadCodeProvider
               };
             } catch (parseErr) {
               vscode.window.showErrorMessage(
-                "Reduce App Size Flutter: Dart CLI output could not be parsed as JSON.\n" +
-                  String(parseErr)
+                "Reduce App Size Flutter: Could not parse analysis output.\n" + String(parseErr)
               );
               this._result = { unused_classes: [], unused_methods: [], unused_assets: [] };
+              this._setState(this._hasAnalyzed ? "done" : "idle");
+              this._onDidChangeTreeData.fire();
+              resolve();
+              return;
             }
 
-            // 5. Refresh the view
+            this._hasAnalyzed = true;
+            this._setState("done");
+
+            // 6. Refresh the view
             this._onDidChangeTreeData.fire();
+
+            // 7. Show a friendly summary notification
+            const classCount  = this._result.unused_classes.length;
+            const methodCount = this._result.unused_methods.length;
+            const assetCount  = this._result.unused_assets.length;
+            const total = classCount + methodCount + assetCount;
+
+            if (total === 0) {
+              vscode.window.showInformationMessage(
+                "Reduce App Size Flutter: No unused code or assets found. Your project looks clean! 🎉"
+              );
+            } else {
+              const parts: string[] = [];
+              if (classCount  > 0) { parts.push(`${classCount} unused class${classCount  > 1 ? "es" : ""}`); }
+              if (methodCount > 0) { parts.push(`${methodCount} unused method${methodCount > 1 ? "s" : ""}`); }
+              if (assetCount  > 0) { parts.push(`${assetCount} unused asset${assetCount  > 1 ? "s" : ""}`); }
+              vscode.window.showWarningMessage(
+                `Reduce App Size Flutter: Analysis complete — ${parts.join(", ")} found.`
+              );
+            }
+
             resolve();
           });
-        })
+        });
+      }
     );
   }
 
@@ -122,6 +164,11 @@ export class DeadCodeProvider
 
   getChildren(element?: DeadCodeTreeItem): DeadCodeTreeItem[] {
     if (!element) {
+      // When not yet analyzed (idle/analyzing), return nothing so viewsWelcome shows
+      if (!this._hasAnalyzed) {
+        return [];
+      }
+
       // Root level: three fixed groups
       const classCount  = this._result.unused_classes?.length  ?? 0;
       const methodCount = this._result.unused_methods?.length  ?? 0;

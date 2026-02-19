@@ -12,7 +12,7 @@ export class DeadCodeTreeItem extends vscode.TreeItem {
     this.description = data.description;
     this.contextValue = data.kind;
 
-    // Open file on click; no command assigned for group items
+    // Open file on click for code/asset items
     if ((data.kind === "class" || data.kind === "method" || data.kind === "asset") && data.file) {
       this.command = {
         command: "deadCode.openFile",

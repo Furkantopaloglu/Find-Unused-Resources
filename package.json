@@ -50,7 +50,19 @@
           "group": "navigation"
         }
       ]
-    }
+    },
+    "viewsWelcome": [
+      {
+        "view": "deadCodeView",
+        "contents": "$(rocket) Reduce App Size Flutter\n\nFind and eliminate dead code to shrink your app's download size.\n\n$(symbol-class)  Unused Classes\n$(symbol-method)  Unused Methods\n$(file-media)  Unused Assets\n\n[$(play)  Start Analysis](command:deadCodeView.refresh)\n\nTip: Re-run after every refactor to keep your project lean.",
+        "when": "reduceAppSize.state == idle"
+      },
+      {
+        "view": "deadCodeView",
+        "contents": "$(loading~spin)  Scanning your Flutter project…\n\nLooking for unused classes, methods and assets.\nThis may take a few seconds.",
+        "when": "reduceAppSize.state == analyzing"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
