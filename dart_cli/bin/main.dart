@@ -7,6 +7,7 @@ import 'package:analyzer/dart/ast/token.dart';
 import 'package:analyzer/dart/ast/visitor.dart';
 import 'package:analyzer/source/line_info.dart';
 import 'package:path/path.dart' as p;
+import 'package:yaml/yaml.dart';
 
 final RegExp _identifierPattern = RegExp(r'^[A-Za-z_]\w*$');
 
@@ -90,7 +91,7 @@ Future<void> main(List<String> args) async {
 
   final output = {
     'unused_classes': unused,
-    'unused_assets': <Map<String, Object>>[],
+    'unused_assets': await _findUnusedAssets(rootPath, dartFiles),
   };
   stdout.writeln(jsonEncode(output));
 }
@@ -106,6 +107,107 @@ Future<List<String>> _collectDartFiles(String dirPath) async {
   }
   files.sort();
   return files;
+}
+
+// ---------------------------------------------------------------------------
+// Unused asset detection
+// ---------------------------------------------------------------------------
+
+/// Returns a list of assets declared in pubspec.yaml but not referenced in any
+/// Dart source file under lib/.
+Future<List<Map<String, Object>>> _findUnusedAssets(
+  String rootPath,
+  List<String> dartFiles,
+) async {
+  // 1. Read and parse pubspec.yaml
+  final pubspecFile = File(p.join(rootPath, 'pubspec.yaml'));
+  if (!pubspecFile.existsSync()) return [];
+
+  YamlMap pubspec;
+  try {
+    final content = await pubspecFile.readAsString();
+    pubspec = loadYaml(content) as YamlMap;
+  } catch (_) {
+    return [];
+  }
+
+  // 2. Collect declared asset paths from flutter.assets
+  final flutterSection = pubspec['flutter'];
+  if (flutterSection == null || flutterSection is! YamlMap) return [];
+
+  final assetsNode = flutterSection['assets'];
+  if (assetsNode == null || assetsNode is! YamlList) return [];
+
+  // 3. Expand each entry to concrete file paths
+  final declaredAssets = <String>[];
+  for (final entry in assetsNode) {
+    final assetEntry = entry.toString();
+    final absoluteEntry = p.join(rootPath, assetEntry);
+
+    if (assetEntry.endsWith('/')) {
+      // Directory entry — add all files inside it (non-recursive by convention)
+      final dir = Directory(absoluteEntry);
+      if (dir.existsSync()) {
+        await for (final entity in dir.list(recursive: false)) {
+          if (entity is File) {
+            // Store as project-relative POSIX path (matching pubspec convention)
+            declaredAssets.add(
+              p.relative(entity.path, from: rootPath).replaceAll('\\', '/'),
+            );
+          }
+        }
+      }
+    } else {
+      // Specific file entry
+      if (File(absoluteEntry).existsSync()) {
+        declaredAssets.add(assetEntry.replaceAll('\\', '/'));
+      }
+    }
+  }
+
+  if (declaredAssets.isEmpty) return [];
+
+  // 4. Collect all string literals from the Dart source files
+  final allStringLiterals = <String>{};
+  for (final filePath in dartFiles) {
+    String content;
+    try {
+      content = await File(filePath).readAsString();
+    } catch (_) {
+      continue;
+    }
+
+    final parseResult = parseString(
+      content: content,
+      path: filePath,
+      throwIfDiagnostics: false,
+    );
+
+    final collector = _StringLiteralCollector();
+    parseResult.unit.accept(collector);
+    allStringLiterals.addAll(collector.literals);
+  }
+
+  // 5. An asset is "unused" when no string fragment contains its path,
+  //    full filename, or filename-without-extension.
+  //    The last check catches interpolated paths like
+  //    '$basePath/ic_survey_report' where only the stem appears as a literal.
+  final unusedAssets = <Map<String, Object>>[];
+  for (final assetPath in declaredAssets) {
+    final basename = p.basename(assetPath); // e.g. ic_survey_report.svg
+    final stem = p.basenameWithoutExtension(assetPath); // e.g. ic_survey_report
+    final isReferenced = allStringLiterals.any(
+      (lit) =>
+          lit.contains(assetPath) ||
+          lit.contains(basename) ||
+          (stem.length > 3 && lit.contains(stem)),
+    );
+    if (!isReferenced) {
+      unusedAssets.add({'path': assetPath});
+    }
+  }
+
+  return unusedAssets;
 }
 
 class _ClassInfo {
@@ -144,4 +246,56 @@ List<String> _collectIdentifierLexemes(CompilationUnit unit) {
     token = token.next;
   }
   return names;
+}
+
+// ---------------------------------------------------------------------------
+// Collects all simple string literal values from an AST
+// ---------------------------------------------------------------------------
+
+class _StringLiteralCollector extends RecursiveAstVisitor<void> {
+  final List<String> literals = [];
+
+  @override
+  void visitSimpleStringLiteral(SimpleStringLiteral node) {
+    literals.add(node.value);
+    super.visitSimpleStringLiteral(node);
+  }
+
+  @override
+  void visitAdjacentStrings(AdjacentStrings node) {
+    // Collect each part individually AND the concatenated whole
+    final buffer = StringBuffer();
+    for (final str in node.strings) {
+      if (str is SimpleStringLiteral) {
+        literals.add(str.value);
+        buffer.write(str.value);
+      }
+    }
+    literals.add(buffer.toString());
+    super.visitAdjacentStrings(node);
+  }
+
+  @override
+  void visitStringInterpolation(StringInterpolation node) {
+    // Collect each literal segment inside an interpolated string.
+    // e.g.  '\$basePath/ic_survey_report'  →  '/ic_survey_report'
+    // e.g.  'assets/\${folder}/logo.png'   →  'assets/' and '/logo.png'
+    // Also reconstruct all consecutive literal segments so that paths
+    // which are split only at variable boundaries are still matchable.
+    final buffer = StringBuffer();
+    for (final element in node.elements) {
+      if (element is InterpolationString) {
+        literals.add(element.value);
+        buffer.write(element.value);
+      } else {
+        // Variable boundary — flush whatever we have so far
+        if (buffer.isNotEmpty) {
+          literals.add(buffer.toString());
+          buffer.clear();
+        }
+      }
+    }
+    if (buffer.isNotEmpty) literals.add(buffer.toString());
+    super.visitStringInterpolation(node);
+  }
 }
