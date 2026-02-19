@@ -42,7 +42,9 @@ Future<void> main(List<String> args) async {
   final dartFiles = await _collectDartFiles(libDir.path);
 
   final classInfos = <_ClassInfo>[];
+  final methodInfos = <_MethodInfo>[];
   final declarationCountByName = <String, int>{};
+  final methodDeclarationCountByName = <String, int>{};
   final identifierCountByName = <String, int>{};
 
   for (final filePath in dartFiles) {
@@ -68,6 +70,15 @@ Future<void> main(List<String> args) async {
           (declarationCountByName[classInfo.name] ?? 0) + 1;
     }
 
+    final methodCollector = _MethodCollector(filePath, parseResult.lineInfo);
+    parseResult.unit.accept(methodCollector);
+
+    for (final methodInfo in methodCollector.methods) {
+      methodInfos.add(methodInfo);
+      methodDeclarationCountByName[methodInfo.name] =
+          (methodDeclarationCountByName[methodInfo.name] ?? 0) + 1;
+    }
+
     for (final name in _collectIdentifierLexemes(parseResult.unit)) {
       identifierCountByName[name] = (identifierCountByName[name] ?? 0) + 1;
     }
@@ -89,8 +100,24 @@ Future<void> main(List<String> args) async {
     }
   }
 
+  // ---- Unused methods ----
+  final unusedMethods = <Map<String, Object>>[];
+  for (final methodInfo in methodInfos) {
+    final totalCount = identifierCountByName[methodInfo.name] ?? 0;
+    final declCount = methodDeclarationCountByName[methodInfo.name] ?? 0;
+    if (totalCount <= declCount) {
+      final relativeFile = p.relative(methodInfo.filePath, from: rootPath);
+      unusedMethods.add({
+        'name': methodInfo.name,
+        'file': relativeFile.replaceAll('\\', '/'),
+        'line': methodInfo.line,
+      });
+    }
+  }
+
   final output = {
     'unused_classes': unused,
+    'unused_methods': unusedMethods,
     'unused_assets': await _findUnusedAssets(rootPath, dartFiles),
   };
   stdout.writeln(jsonEncode(output));
@@ -208,6 +235,65 @@ Future<List<Map<String, Object>>> _findUnusedAssets(
   }
 
   return unusedAssets;
+}
+
+// ---------------------------------------------------------------------------
+// Method info & collector
+// ---------------------------------------------------------------------------
+
+class _MethodInfo {
+  _MethodInfo({required this.name, required this.filePath, required this.line});
+
+  final String name;
+  final String filePath;
+  final int line;
+}
+
+/// Collects method and top-level function declarations, skipping well-known
+/// Flutter framework callbacks that are invoked by the framework at runtime.
+class _MethodCollector extends RecursiveAstVisitor<void> {
+  _MethodCollector(this.filePath, this.lineInfo);
+
+  final String filePath;
+  final LineInfo lineInfo;
+  final List<_MethodInfo> methods = [];
+
+  // These are called by the Flutter/Dart runtime — exclude from "unused" checks.
+  static const _excluded = {
+    'build',
+    'createState',
+    'initState',
+    'dispose',
+    'deactivate',
+    'reassemble',
+    'didChangeDependencies',
+    'didUpdateWidget',
+    'debugFillProperties',
+    'toString',
+    'hashCode',
+    'noSuchMethod',
+    'main',
+  };
+
+  @override
+  void visitMethodDeclaration(MethodDeclaration node) {
+    final name = node.name.lexeme;
+    if (!_excluded.contains(name)) {
+      final line = lineInfo.getLocation(node.name.offset).lineNumber;
+      methods.add(_MethodInfo(name: name, filePath: filePath, line: line));
+    }
+    super.visitMethodDeclaration(node);
+  }
+
+  @override
+  void visitFunctionDeclaration(FunctionDeclaration node) {
+    final name = node.name.lexeme;
+    if (!_excluded.contains(name)) {
+      final line = lineInfo.getLocation(node.name.offset).lineNumber;
+      methods.add(_MethodInfo(name: name, filePath: filePath, line: line));
+    }
+    super.visitFunctionDeclaration(node);
+  }
 }
 
 class _ClassInfo {

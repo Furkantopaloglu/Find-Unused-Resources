@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { exec } from "child_process";
 import * as path from "path";
 import * as fs from "fs";
-import { DartAnalysisResult, DeadCodeItem } from "./types";
+import { DartAnalysisResult, DeadCodeItem, UnusedMethod } from "./types";
 import { DeadCodeTreeItem } from "./DeadCodeTreeItem";
 
 // -----------------------------------------------------------------------
@@ -20,6 +20,7 @@ export class DeadCodeProvider
   /** Last analysis result parsed from the Dart CLI */
   private _result: DartAnalysisResult = {
     unused_classes: [],
+    unused_methods: [],
     unused_assets: [],
   };
 
@@ -94,6 +95,7 @@ export class DeadCodeProvider
               // Normalize missing/null fields to empty arrays
               this._result = {
                 unused_classes: Array.isArray(parsed.unused_classes) ? parsed.unused_classes : [],
+                unused_methods: Array.isArray(parsed.unused_methods) ? parsed.unused_methods : [],
                 unused_assets:  Array.isArray(parsed.unused_assets)  ? parsed.unused_assets  : [],
               };
             } catch (parseErr) {
@@ -101,7 +103,7 @@ export class DeadCodeProvider
                 "Reduce App Size Flutter: Dart CLI output could not be parsed as JSON.\n" +
                   String(parseErr)
               );
-              this._result = { unused_classes: [], unused_assets: [] };
+              this._result = { unused_classes: [], unused_methods: [], unused_assets: [] };
             }
 
             // 5. Refresh the view
@@ -120,15 +122,21 @@ export class DeadCodeProvider
 
   getChildren(element?: DeadCodeTreeItem): DeadCodeTreeItem[] {
     if (!element) {
-      // Root level: two fixed groups
-      const classCount = this._result.unused_classes?.length ?? 0;
-      const assetCount = this._result.unused_assets?.length ?? 0;
+      // Root level: three fixed groups
+      const classCount  = this._result.unused_classes?.length  ?? 0;
+      const methodCount = this._result.unused_methods?.length  ?? 0;
+      const assetCount  = this._result.unused_assets?.length   ?? 0;
 
       const groups: DeadCodeItem[] = [
         {
           label: "Unused Classes",
           kind: "group",
           description: `${classCount} item`,
+        },
+        {
+          label: "Unused Methods",
+          kind: "group",
+          description: `${methodCount} item`,
         },
         {
           label: "Unused Assets",
@@ -153,6 +161,20 @@ export class DeadCodeProvider
           tooltip: `${cls.name}\n${cls.file} — line ${cls.line}`,
           file: cls.file,
           line: cls.line,
+        };
+        return new DeadCodeTreeItem(item, vscode.TreeItemCollapsibleState.None);
+      });
+    }
+
+    if (element.data.label === "Unused Methods") {
+      return (this._result.unused_methods ?? []).map((method: UnusedMethod) => {
+        const item: DeadCodeItem = {
+          label: method.name,
+          kind: "method",
+          description: `${method.file}:${method.line}`,
+          tooltip: `${method.name}\n${method.file} — line ${method.line}`,
+          file: method.file,
+          line: method.line,
         };
         return new DeadCodeTreeItem(item, vscode.TreeItemCollapsibleState.None);
       });
