@@ -31,6 +31,38 @@ Future<List<Map<String, Object>>> findUnusedAssets(
   final assetsNode = flutterSection['assets'];
   if (assetsNode == null || assetsNode is! YamlList) return [];
 
+  // 2b. Collect font asset paths declared under flutter.fonts so they can be
+  //     excluded from the unused-assets check.  Fonts are referenced by their
+  //     family name in Dart code, not by file path, so the string-literal
+  //     heuristic below would always flag them as unused.
+  final fontAssetPaths = <String>{};
+  final fontsNode = flutterSection['fonts'];
+  if (fontsNode is YamlList) {
+    for (final fontFamily in fontsNode) {
+      if (fontFamily is! YamlMap) continue;
+      final fontFiles = fontFamily['fonts'];
+      if (fontFiles is! YamlList) continue;
+      for (final fontFile in fontFiles) {
+        if (fontFile is! YamlMap) continue;
+        final assetValue = fontFile['asset'];
+        if (assetValue != null) {
+          fontAssetPaths.add(assetValue.toString().replaceAll('\\', '/'));
+        }
+      }
+    }
+  }
+
+  // Returns true for asset paths that should never appear in the unused list
+  // because they are consumed at runtime without an explicit string reference
+  // in Dart source (e.g. font files, .env files).
+  bool isAlwaysUsed(String relativePath) {
+    if (fontAssetPaths.contains(relativePath)) return true;
+    final name = p.basename(relativePath);
+    // .env, .env.development, .env.production, etc.
+    if (name == '.env' || name.startsWith('.env.')) return true;
+    return false;
+  }
+
   // 3. Expand each entry to concrete file paths
   final declaredAssets = <String>[];
   for (final entry in assetsNode) {
@@ -43,16 +75,20 @@ Future<List<Map<String, Object>>> findUnusedAssets(
       if (dir.existsSync()) {
         await for (final entity in dir.list(recursive: false)) {
           if (entity is File) {
-            declaredAssets.add(
-              p.relative(entity.path, from: rootPath).replaceAll('\\', '/'),
-            );
+            final relativePath = p
+                .relative(entity.path, from: rootPath)
+                .replaceAll('\\', '/');
+            if (!isAlwaysUsed(relativePath)) {
+              declaredAssets.add(relativePath);
+            }
           }
         }
       }
     } else {
       // Specific file entry
-      if (File(absoluteEntry).existsSync()) {
-        declaredAssets.add(assetEntry.replaceAll('\\', '/'));
+      final normalised = assetEntry.replaceAll('\\', '/');
+      if (!isAlwaysUsed(normalised) && File(absoluteEntry).existsSync()) {
+        declaredAssets.add(normalised);
       }
     }
   }
