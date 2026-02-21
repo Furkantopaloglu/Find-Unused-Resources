@@ -17,6 +17,7 @@ export interface ApkReportData {
   topItems: ApkTopItem[];
   jsonPath: string;
   buildDate: string;
+  fileType: "apk" | "ipa";
 }
 
 // ─── Panel ────────────────────────────────────────────────────────────────────
@@ -279,9 +280,9 @@ export class ApkSizePanel {
   <!-- Stat cards -->
   <div class="cards">
     <div class="card total">
-      <div class="card-label">Total APK Size</div>
+      <div class="card-label" id="label-total">Total Size</div>
       <div class="card-value" id="c-total">—</div>
-      <div class="card-sub">compressed download size</div>
+      <div class="card-sub" id="label-total-sub">compressed download size</div>
     </div>
     <div class="card dart">
       <div class="card-label">Dart Code</div>
@@ -294,7 +295,7 @@ export class ApkSizePanel {
       <div class="card-sub" id="c-assets-pct">images, fonts &amp; data</div>
     </div>
     <div class="card native">
-      <div class="card-label">Native / JVM</div>
+      <div class="card-label" id="label-native">Native / JVM</div>
       <div class="card-value" id="c-native">—</div>
       <div class="card-sub" id="c-native-pct">.so libs &amp; dex</div>
     </div>
@@ -364,7 +365,13 @@ function render(data) {
   document.getElementById('loading').style.display = 'none';
   document.getElementById('report').style.display  = 'block';
 
-  const { totalBytes, dartCodeBytes, assetsBytes, nativeBytes, otherBytes, topItems, jsonPath, buildDate } = data;
+  const { totalBytes, dartCodeBytes, assetsBytes, nativeBytes, otherBytes, topItems, jsonPath, buildDate, fileType } = data;
+  const isIpa = fileType === 'ipa';
+
+  // Dynamic labels
+  document.getElementById('label-total').textContent     = isIpa ? 'Total IPA Size'  : 'Total APK Size';
+  document.getElementById('label-total-sub').textContent = isIpa ? 'compressed .ipa file size' : 'compressed download size';
+  document.getElementById('label-native').textContent    = isIpa ? 'Native / Swift'  : 'Native / JVM';
 
   // Header meta
   document.getElementById('meta-line').textContent =
