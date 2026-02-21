@@ -97,6 +97,19 @@ export class DeadCodeProvider
         progress.report({ message: "Scanning your Flutter project…" });
 
         return new Promise<void>((resolve) => {
+          // Ensure Dart dependencies are resolved before running the CLI.
+          // This is a no-op when the lock file and .dart_tool/ are up to date.
+          exec("dart pub get --no-precompile", { cwd: cliRoot }, (pubErr) => {
+            if (pubErr) {
+              vscode.window.showErrorMessage(
+                `Flutter Find Unused Resources: Failed to resolve Dart dependencies. Make sure the Dart SDK is installed and on your PATH.\n${pubErr.message}`
+              );
+              this._setState(this._hasAnalyzed ? "done" : "idle");
+              this._onDidChangeTreeData.fire();
+              resolve();
+              return;
+            }
+
           const cmd = `dart run "${scriptPath}" "${projectPath}"`;
 
           exec(cmd, { cwd: cliRoot }, (error, stdout, stderr) => {
@@ -171,8 +184,9 @@ export class DeadCodeProvider
             }
 
             resolve();
-          });
-        });
+          }); // closes: exec(dart run)
+          }); // closes: exec(dart pub get)
+        });   // closes: new Promise
       }
     );
   }
@@ -196,26 +210,28 @@ export class DeadCodeProvider
       const packageCount = this._result.unused_packages?.length  ?? 0;
       const assetCount   = this._result.unused_assets?.length    ?? 0;
 
+      const pl = (n: number) => `${n} item${n === 1 ? "" : "s"}`;
+
       const groups: DeadCodeItem[] = [
         {
           label: "Unused Classes",
           kind: "group",
-          description: `${classCount} item`,
+          description: pl(classCount),
         },
         {
           label: "Unused Methods",
           kind: "group",
-          description: `${methodCount} item`,
+          description: pl(methodCount),
         },
         {
           label: "Unused Packages",
           kind: "group",
-          description: `${packageCount} item`,
+          description: pl(packageCount),
         },
         {
           label: "Unused Assets",
           kind: "group",
-          description: `${assetCount} item`,
+          description: pl(assetCount),
         },
       ];
 

@@ -1,0 +1,23 @@
+# Source files (only compiled output in out/ is needed)
+src/**
+**/*.ts
+tsconfig.json
+
+# Git metadata
+.git/**
+.gitignore
+
+# npm lock file & dev dependencies (vsce excludes node_modules automatically)
+node_modules/**
+package-lock.json
+
+# Dart analysis / build caches (keep pubspec.lock and .dart_tool for offline execution)
+dart_cli/build/**
+dart_cli/.packages
+
+# Misplaced Dart analysis config (moved to dart_cli/)
+analysis_options.yaml
+
+# OS artifacts
+.DS_Store
+Thumbs.db
