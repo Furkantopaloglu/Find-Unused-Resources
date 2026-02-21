@@ -42,11 +42,6 @@
         "title": "Reduce App Size Flutter: Open File"
       },
       {
-        "command": "deadCode.analyzeApkSize",
-        "title": "Analyze APK Size",
-        "icon": "$(pie-chart)"
-      },
-      {
         "command": "deadCode.loadApk",
         "title": "Load APK File",
         "icon": "$(package)"
@@ -64,7 +59,7 @@
     "viewsWelcome": [
       {
         "view": "deadCodeView",
-        "contents": "$(rocket) Reduce App Size Flutter\n\nFind and eliminate dead code to shrink your app's download size.\n\n$(symbol-class)  Unused Classes\n$(symbol-method)  Unused Methods\n$(package)  Unused Packages\n$(file-media)  Unused Assets\n\n[$(play)  Start Analysis](command:deadCodeView.refresh)\n\n---\n\n[$(pie-chart)  Analyze APK Size](command:deadCode.analyzeApkSize)\n\n[$(package)  Load APK File](command:deadCode.loadApk)\n\nTip: Re-run after every refactor to keep your project lean.",
+        "contents": "$(rocket) Reduce App Size Flutter\n\nFind and eliminate dead code to shrink your app's download size.\n\n$(symbol-class)  Unused Classes\n$(symbol-method)  Unused Methods\n$(package)  Unused Packages\n$(file-media)  Unused Assets\n\n[$(play)  Start Analysis](command:deadCodeView.refresh)\n\n---\n\n[$(package)  Load APK File](command:deadCode.loadApk)\n\nTip: Re-run after every refactor to keep your project lean.",
         "when": "reduceAppSize.state == idle"
       },
       {
