@@ -1,12 +1,35 @@
 {
   "name": "flutter-find-unused-resources",
   "displayName": "Flutter Find Unused Resources",
-  "description": "Detects unused classes and assets in your Flutter project.",
+  "description": "Detect unused classes, methods, packages and assets in your Flutter project. Reduce APK/IPA size with a built-in binary size breakdown panel.",
   "version": "0.0.1",
+  "publisher": "furkantopaloglu",
+  "license": "MIT",
+  "icon": "resources/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Furkantopaloglu/Find-Unused-Resources"
+  },
+  "keywords": [
+    "flutter",
+    "dart",
+    "unused",
+    "dead code",
+    "assets",
+    "optimize",
+    "apk",
+    "ipa",
+    "size"
+  ],
+  "galleryBanner": {
+    "color": "#0175C2",
+    "theme": "dark"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
   "categories": [
+    "Linters",
     "Other"
   ],
   "activationEvents": [],
@@ -82,8 +105,7 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "pretest": "npm run compile",
-    "lint": "eslint src"
+    "pretest": "npm run compile"
   },
   "devDependencies": {
     "@types/vscode": "^1.85.0",
