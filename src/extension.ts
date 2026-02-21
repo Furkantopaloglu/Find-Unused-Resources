@@ -198,6 +198,200 @@ async function analyzeApkDirect(apkPath: string): Promise<ApkReportData> {
     topItems,
     jsonPath: apkPath,   // reuse field to carry the source path
     buildDate: new Date().toLocaleString(),
+    fileType: "apk" as const,
+  };
+}
+
+/**
+ * Resolve an IPA ZIP entry to a human-readable label + category.
+ *
+ * IMPORTANT: checks are ordered from most-specific to least-specific.
+ * The flutter_assets check MUST come before the generic .framework check
+ * because flutter assets live inside App.framework/flutter_assets/.
+ */
+function resolveIpaComponent(
+  rawName: string,
+  fullPath: string
+): { label: string; category: ApkTopItem["category"] } {
+
+  // ── 1. Flutter assets (MUST be before .framework catch-all) ───────────────
+  if (fullPath.includes("flutter_assets/") || fullPath.includes("flutter_assets\\\\")) {
+    if (/\.(png|jpe?g|webp|gif|svg)$/i.test(rawName)) {
+      return { label: `Flutter Image: ${rawName}`, category: "Assets" };
+    }
+    if (/\.(ttf|otf|woff2?)$/i.test(rawName)) {
+      return { label: `Flutter Font: ${rawName}`, category: "Assets" };
+    }
+    return { label: "Flutter Assets (images, fonts, data)", category: "Assets" };
+  }
+
+  // ── 2. Dart AOT snapshot binary ───────────────────────────────────────────
+  if (/App\.framework[/\\]App$/i.test(fullPath)) {
+    return { label: "Dart AOT Snapshot (App.framework/App)", category: "Dart" };
+  }
+
+  // ── 3. Flutter engine binary ──────────────────────────────────────────────
+  if (/Flutter\.framework[/\\]Flutter$/i.test(fullPath)) {
+    return { label: "Flutter Engine (Flutter.framework/Flutter)", category: "Native" };
+  }
+
+  // ── 4. Swift support libraries (SwiftSupport/*.dylib) ────────────────────
+  if (fullPath.startsWith("SwiftSupport/")) {
+    const libMatch = rawName.match(/^libswift(.+?)\.dylib$/i);
+    const libName = libMatch ? `Swift ${libMatch[1]}` : rawName;
+    return { label: `Swift Support: ${libName}`, category: "Native" };
+  }
+
+  // ── 5. Debug symbols strip (Symbols/) ────────────────────────────────────
+  if (fullPath.startsWith("Symbols/")) {
+    return { label: "Debug Symbols", category: "Other" };
+  }
+
+  // ── 6. Any .dylib (plugin native libraries) ───────────────────────────────
+  if (rawName.endsWith(".dylib")) {
+    return { label: `Native Library: ${rawName}`, category: "Native" };
+  }
+
+  // ── 7. Named framework binary, e.g. Sentry.framework/Sentry ─────────────
+  const fwBinaryMatch = fullPath.match(/\/([^/]+)\.framework\/\1$/i);
+  if (fwBinaryMatch) {
+    return { label: `Plugin Framework: ${fwBinaryMatch[1]}`, category: "Native" };
+  }
+
+  // ── 8. Main app binary Payload/Foo.app/Foo ────────────────────────────────
+  const appBinaryMatch = fullPath.match(/^Payload\/([^/]+)\.app\/\1$/i);
+  if (appBinaryMatch) {
+    return { label: `Main App Binary (${appBinaryMatch[1]})`, category: "Native" };
+  }
+
+  // ── 9. App extension binaries (PlugIns/) ─────────────────────────────────
+  const appexMatch = fullPath.match(/\/PlugIns\/([^/]+)\.appex\/\1$/i);
+  if (appexMatch) {
+    return { label: `App Extension: ${appexMatch[1]}`, category: "Native" };
+  }
+
+  // ── 10. Compiled asset catalog ───────────────────────────────────────────
+  if (rawName === "Assets.car") {
+    return { label: "iOS Compiled Assets (Assets.car)", category: "Assets" };
+  }
+
+  // ── 11. Standalone image / font assets (e.g. inside plugin .bundles) ─────
+  if (/\.(png|jpe?g|webp|gif|svg)$/i.test(rawName)) {
+    return { label: `Image Asset: ${rawName}`, category: "Assets" };
+  }
+  if (/\.(ttf|otf|woff2?)$/i.test(rawName)) {
+    return { label: `Font Asset: ${rawName}`, category: "Assets" };
+  }
+
+  // ── 12. Localisation strings ──────────────────────────────────────────────
+  if (fullPath.includes(".lproj/")) {
+    return { label: "Localisation Resources", category: "Other" };
+  }
+
+  // ── 13. Code signatures ───────────────────────────────────────────────────
+  if (fullPath.includes("_CodeSignature/")) {
+    return { label: "Code Signature", category: "Other" };
+  }
+
+  return { label: rawName, category: "Other" };
+}
+
+/**
+ * Analyze an IPA file directly — no Xcode build needed.
+ *
+ * Strategy: IPA is a ZIP file. `unzip -v` lists every entry with its
+ * compressed size (= what is actually stored / downloaded).
+ */
+async function analyzeIpaDirect(ipaPath: string): Promise<ApkReportData> {
+  // ── 1. Run unzip -v ─────────────────────────────────────────────────────
+  const raw = await new Promise<string>((resolve, reject) => {
+    cp.exec(`unzip -v "${ipaPath}"`, { maxBuffer: 10 * 1024 * 1024 }, (err, stdout) => {
+      if (err && !stdout.trim()) { reject(new Error(err.message)); return; }
+      resolve(stdout);
+    });
+  });
+
+  // ── 2. Parse each file entry ─────────────────────────────────────────────
+  const lineRe =
+    /^\s*(\d+)\s+\S+\s+(\d+)\s+-?\d+%\s+\d{2}-\d{2}-\d{4}\s+\d{2}:\d{2}\s+[0-9a-f]{8}\s+(.+?)\s*$/i;
+
+  interface FileEntry { compressedBytes: number; name: string; }
+  const entries: FileEntry[] = [];
+
+  for (const line of raw.split('\n')) {
+    const m = line.match(lineRe);
+    if (m) {
+      entries.push({ compressedBytes: parseInt(m[2], 10), name: m[3].trim() });
+    }
+  }
+
+  console.log("[IPA Direct] Raw sample (first 5 lines):\n",
+    raw.split('\n').slice(0, 5).join('\n'));
+  console.log("[IPA Direct] Entries parsed:", entries.length);
+
+  if (entries.length === 0) {
+    const sample = raw.split('\n').slice(0, 10).join('\n');
+    console.error("[IPA Direct] Could not parse IPA. Raw output sample:\n", sample);
+    throw new Error(
+      "Could not parse any entries from the IPA.\n" +
+      "Raw output sample (see Output panel):\n" + sample
+    );
+  }
+
+  // ── 3. Categorise & sum ──────────────────────────────────────────────────
+  let dartCodeBytes = 0;
+  let nativeBytes   = 0;
+  let assetsBytes   = 0;
+  let otherBytes    = 0;
+
+  const allItems: ApkTopItem[] = entries
+    .filter(e => e.compressedBytes > 0)   // skip directory entries (0 bytes)
+    .map(e => {
+      const { label, category } = resolveIpaComponent(path.basename(e.name), e.name);
+      switch (category) {
+        case "Dart":   dartCodeBytes += e.compressedBytes; break;
+        case "Native": nativeBytes   += e.compressedBytes; break;
+        case "Assets": assetsBytes   += e.compressedBytes; break;
+        default:       otherBytes    += e.compressedBytes; break;
+      }
+      return { name: label, sizeBytes: e.compressedBytes, category };
+    });
+
+  const totalBytes = fs.statSync(ipaPath).size;
+
+  // Deduplicate labels and sum (e.g. many "Flutter Assets" entries → one bar)
+  const aggregated = new Map<string, { sizeBytes: number; category: ApkTopItem["category"] }>();
+  for (const item of allItems) {
+    const existing = aggregated.get(item.name);
+    if (existing) {
+      existing.sizeBytes += item.sizeBytes;
+    } else {
+      aggregated.set(item.name, { sizeBytes: item.sizeBytes, category: item.category });
+    }
+  }
+
+  const topItems = Array.from(aggregated.entries())
+    .map(([name, v]) => ({ name, sizeBytes: v.sizeBytes, category: v.category }))
+    .sort((a, b) => b.sizeBytes - a.sizeBytes)
+    .slice(0, 10);
+
+  console.log("[IPA Direct] Total (file)  :", fmtBytes(totalBytes));
+  console.log("[IPA Direct] Dart          :", fmtBytes(dartCodeBytes));
+  console.log("[IPA Direct] Native        :", fmtBytes(nativeBytes));
+  console.log("[IPA Direct] Assets        :", fmtBytes(assetsBytes));
+  console.log("[IPA Direct] Other         :", fmtBytes(otherBytes));
+  console.log("[IPA Direct] Top 10 items  :", topItems.map(i => `${i.name}: ${fmtBytes(i.sizeBytes)}`).join(", "));
+
+  return {
+    totalBytes,
+    dartCodeBytes,
+    assetsBytes,
+    nativeBytes,
+    otherBytes: Math.max(0, totalBytes - dartCodeBytes - nativeBytes - assetsBytes),
+    topItems,
+    jsonPath: ipaPath,
+    buildDate: new Date().toLocaleString(),
+    fileType: "ipa" as const,
   };
 }
 
@@ -326,11 +520,48 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   );
 
+  // ── Load IPA directly ─────────────────────────────────────────────────────
+  const loadIpaCommand = vscode.commands.registerCommand(
+    "deadCode.loadIpaFile",
+    async () => {
+      const uris = await vscode.window.showOpenDialog({
+        title:            "Select IPA File",
+        canSelectFiles:   true,
+        canSelectFolders: false,
+        canSelectMany:    false,
+        filters:          { "IPA Files": ["ipa"] },
+        openLabel:        "Analyze",
+      });
+      if (!uris || uris.length === 0) { return; }
+      const ipaPath = uris[0].fsPath;
+
+      await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: "IPA Size Analysis",
+          cancellable: false,
+        },
+        async (progress) => {
+          progress.report({ message: `Reading ${path.basename(ipaPath)}…` });
+          try {
+            const reportData = await analyzeIpaDirect(ipaPath);
+            ApkSizePanel.show(reportData);
+          } catch (err) {
+            vscode.window.showErrorMessage(
+              `IPA Size Analysis: ${String(err)}`
+            );
+          }
+        }
+      );
+    }
+  );
+
   context.subscriptions.push(
     treeView,
     refreshCommand,
     openFileCommand,
     loadApkCommand,
+    loadIpaCommand,
   );
 
   console.log("Reduce App Size Flutter extension active.");
