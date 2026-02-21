@@ -41,15 +41,32 @@ export class DeadCodeProvider
   // ---- Public API -------------------------------------------------------
 
   /**
+   * Clears all analysis results and resets the view back to the initial idle
+   * state — exactly as if the extension had just been opened.
+   * Called by the `deadCodeView.reset` command (title-bar refresh button).
+   */
+  reset(): void {
+    this._result = {
+      unused_classes: [],
+      unused_methods: [],
+      unused_packages: [],
+      unused_assets: [],
+    };
+    this._hasAnalyzed = false;
+    this._setState("idle");
+    this._onDidChangeTreeData.fire();
+  }
+
+  /**
    * Runs the Dart CLI tool, parses the result, and updates the view.
-   * Called by the `deadCodeView.refresh` command in extension.ts.
+   * Called by the `deadCodeView.refresh` command (Start Analysis button).
    */
   async refresh(): Promise<void> {
     // 1. Check for an open workspace
     const folders = vscode.workspace.workspaceFolders;
     if (!folders || folders.length === 0) {
       vscode.window.showWarningMessage(
-        "Reduce App Size Flutter: Please open a Flutter project folder first."
+        "Flutter Find Unused Resources: Please open a Flutter project folder first."
       );
       return;
     }
@@ -60,7 +77,7 @@ export class DeadCodeProvider
     const scriptPath = path.resolve(cliRoot, "bin", "main.dart");
     if (!fs.existsSync(scriptPath)) {
       vscode.window.showErrorMessage(
-        "Reduce App Size Flutter: Internal analysis tool not found. Please verify the extension package."
+        "Flutter Find Unused Resources: Internal analysis tool not found. Please verify the extension package."
       );
       return;
     }
@@ -73,7 +90,7 @@ export class DeadCodeProvider
     await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
-        title: "Reduce App Size Flutter",
+        title: "Flutter Find Unused Resources",
         cancellable: false,
       },
       (progress) => {
@@ -86,7 +103,7 @@ export class DeadCodeProvider
             if (error) {
               const msg = stderr?.trim() || error.message;
               vscode.window.showErrorMessage(
-                `Reduce App Size Flutter: Analysis failed.\n${msg}`
+                `Flutter Find Unused Resources: Analysis failed.\n${msg}`
               );
               this._setState(this._hasAnalyzed ? "done" : "idle");
               this._onDidChangeTreeData.fire();
@@ -95,7 +112,7 @@ export class DeadCodeProvider
             }
 
             if (stderr?.trim()) {
-              console.warn("[Reduce App Size Flutter] stderr:", stderr);
+              console.warn("[Flutter Find Unused Resources] stderr:", stderr);
             }
 
             // 5. Parse stdout
@@ -116,7 +133,7 @@ export class DeadCodeProvider
               };
             } catch (parseErr) {
               vscode.window.showErrorMessage(
-                "Reduce App Size Flutter: Could not parse analysis output.\n" + String(parseErr)
+                "Flutter Find Unused Resources: Could not parse analysis output.\n" + String(parseErr)
               );
               this._result = { unused_classes: [], unused_methods: [], unused_packages: [], unused_assets: [] };
               this._setState(this._hasAnalyzed ? "done" : "idle");
@@ -140,7 +157,7 @@ export class DeadCodeProvider
 
             if (total === 0) {
               vscode.window.showInformationMessage(
-                "Reduce App Size Flutter: No unused code, packages or assets found. Your project looks clean! 🎉"
+                "Flutter Find Unused Resources: No unused code, packages or assets found. Your project looks clean! 🎉"
               );
             } else {
               const parts: string[] = [];
@@ -149,7 +166,7 @@ export class DeadCodeProvider
               if (packageCount > 0) { parts.push(`${packageCount} unused package${packageCount > 1 ? "s" : ""}`); }
               if (assetCount   > 0) { parts.push(`${assetCount} unused asset${assetCount   > 1 ? "s" : ""}`); }
               vscode.window.showWarningMessage(
-                `Reduce App Size Flutter: Analysis complete — ${parts.join(", ")} found.`
+                `Flutter Find Unused Resources: Analysis complete — ${parts.join(", ")} found.`
               );
             }
 
