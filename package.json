@@ -1,6 +1,6 @@
 {
-  "name": "reduce-app-size-flutter",
-  "displayName": "Reduce App Size Flutter",
+  "name": "flutter-find-unused-resources",
+  "displayName": "Flutter Find Unused Resources",
   "description": "Detects unused classes and assets in your Flutter project.",
   "version": "0.0.1",
   "engines": {
@@ -16,7 +16,7 @@
       "activitybar": [
         {
           "id": "deadCode-sidebar",
-          "title": "Reduce App Size Flutter",
+          "title": "Flutter Unused Resources",
           "icon": "resources/icon.svg"
         }
       ]
@@ -25,21 +25,25 @@
       "deadCode-sidebar": [
         {
           "id": "deadCodeView",
-          "name": "Dead Code",
+          "name": "Find Unused Resources",
           "icon": "resources/icon.svg",
-          "contextualTitle": "Reduce App Size Flutter"
+          "contextualTitle": "Flutter Find Unused Resources"
         }
       ]
     },
     "commands": [
       {
         "command": "deadCodeView.refresh",
-        "title": "Reduce App Size Flutter: Refresh",
+        "title": "Flutter Find Unused Resources: Run Analysis"
+      },
+      {
+        "command": "deadCodeView.reset",
+        "title": "Flutter Find Unused Resources: Clear Results",
         "icon": "$(refresh)"
       },
       {
         "command": "deadCode.openFile",
-        "title": "Reduce App Size Flutter: Open File"
+        "title": "Flutter Find Unused Resources: Open File"
       },
       {
         "command": "deadCode.loadApk",
@@ -55,8 +59,8 @@
     "menus": {
       "view/title": [
         {
-          "command": "deadCodeView.refresh",
-          "when": "view == deadCodeView",
+          "command": "deadCodeView.reset",
+          "when": "view == deadCodeView && reduceAppSize.state == done",
           "group": "navigation"
         }
       ]
@@ -64,7 +68,7 @@
     "viewsWelcome": [
       {
         "view": "deadCodeView",
-        "contents": "$(rocket) Reduce App Size Flutter\n\nAnalyze your Flutter project to find dead code, unused resources, and bloated dependencies — then remove them to reduce download size and improve startup performance.\n\n$(symbol-class)  Unused Classes — Dart classes that are declared but never instantiated or referenced anywhere in the project.\n\n$(symbol-method)  Unused Methods — Functions and methods that are defined but never called from any part of the codebase.\n\n$(package)  Unused Packages — Dependencies listed in pubspec.yaml that are never imported in any Dart source file.\n\n$(file-media)  Unused Assets — Images, fonts, and data files registered in pubspec.yaml but not referenced in any code.\n\n[$(play)  Start Analysis](command:deadCodeView.refresh)\n\n---\n\n$(graph)  APK / IPA Size Breakdown\n\nLoad a compiled binary to get a detailed breakdown of which components (Dart AOT snapshot, Flutter engine, native libraries, DEX bytecode, assets) are consuming the most space — so you know exactly where to focus your optimization efforts.\n\n[$(package)  Load APK File](command:deadCode.loadApk)\n\n[$(device-mobile)  Load IPA File](command:deadCode.loadIpaFile)\n\nTip: Re-run the analysis after every major refactor. Even small removals can noticeably reduce your app's install size and improve user acquisition.",
+        "contents": "$(rocket) Flutter Find Unused Resources\n\nAnalyze your Flutter project to find dead code, unused resources, and bloated dependencies — then remove them to reduce download size and improve startup performance.\n\n$(symbol-class)  Unused Classes — Dart classes that are declared but never instantiated or referenced anywhere in the project.\n\n$(symbol-method)  Unused Methods — Functions and methods that are defined but never called from any part of the codebase.\n\n$(package)  Unused Packages — Dependencies listed in pubspec.yaml that are never imported in any Dart source file.\n\n$(file-media)  Unused Assets — Images, fonts, and data files registered in pubspec.yaml but not referenced in any code.\n\n[$(play)  Start Analysis](command:deadCodeView.refresh)\n\n---\n\n$(graph)  APK / IPA Size Breakdown\n\nLoad a compiled binary to get a detailed breakdown of which components (Dart AOT snapshot, Flutter engine, native libraries, DEX bytecode, assets) are consuming the most space — so you know exactly where to focus your optimization efforts.\n\n[$(package)  Load APK File](command:deadCode.loadApk)\n\n[$(device-mobile)  Load IPA File](command:deadCode.loadIpaFile)\n\nTip: Re-run the analysis after every major refactor. Even small removals can noticeably reduce your app's install size and improve user acquisition.",
         "when": "reduceAppSize.state == idle"
       },
       {

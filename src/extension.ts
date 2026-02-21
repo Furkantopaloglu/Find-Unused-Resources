@@ -405,10 +405,16 @@ export function activate(context: vscode.ExtensionContext): void {
     showCollapseAll: true,
   });
 
-  // Refresh command — matches the button in package.json
+  // Refresh command — runs the analysis (Start Analysis button in viewsWelcome)
   const refreshCommand = vscode.commands.registerCommand(
     "deadCodeView.refresh",
     () => provider.refresh()
+  );
+
+  // Reset command — clears data and returns to idle (title-bar refresh button)
+  const resetCommand = vscode.commands.registerCommand(
+    "deadCodeView.reset",
+    () => provider.reset()
   );
 
   // Open file command — triggered when a tree item is clicked
@@ -437,7 +443,7 @@ export function activate(context: vscode.ExtensionContext): void {
         }
       } catch (err) {
         vscode.window.showErrorMessage(
-          `Reduce App Size Flutter: Could not open file: ${filePath}\n${String(err)}`
+          `Flutter Find Unused Resources: Could not open file: ${filePath}\n${String(err)}`
         );
       }
     }
@@ -559,12 +565,13 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     treeView,
     refreshCommand,
+    resetCommand,
     openFileCommand,
     loadApkCommand,
     loadIpaCommand,
   );
 
-  console.log("Reduce App Size Flutter extension active.");
+  console.log("Flutter Find Unused Resources extension active.");
 }
 
 export function deactivate(): void {}
