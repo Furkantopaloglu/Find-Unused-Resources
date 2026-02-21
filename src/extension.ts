@@ -237,6 +237,111 @@ function parseSizeJson(jsonPath: string): ApkSizeSummary & { root: SizeNode } {
   return { totalBytes, dartCodeBytes, assetsBytes, nativeBytes, otherBytes, root };
 }
 
+/**
+ * Analyze an APK file directly — no Flutter build needed.
+ *
+ * Strategy: APK is a ZIP file. `unzip -v` lists every entry with its
+ * compressed size, which is what actually affects the download size.
+ *
+ * Output format (one data line per entry):
+ *   Length  Method   Size Cmpr    Date    Time   CRC-32   Name
+ *   123456  Defl:X  45678  63%  2024-…  12:00  deadbeef  lib/arm64-v8a/libapp.so
+ */
+async function analyzeApkDirect(apkPath: string): Promise<ApkReportData> {
+  // ── 1. Run unzip -v ─────────────────────────────────────────────────────
+  const raw = await new Promise<string>((resolve, reject) => {
+    cp.exec(`unzip -v "${apkPath}"`, { maxBuffer: 10 * 1024 * 1024 }, (err, stdout) => {
+      // unzip exits with 1 when there are warnings — still usable
+      if (err && !stdout.trim()) { reject(new Error(err.message)); return; }
+      resolve(stdout);
+    });
+  });
+
+  // ── 2. Parse each file entry ─────────────────────────────────────────────
+  //
+  // unzip -v format (macOS / Linux):
+  //  Length   Method    Size  Cmpr    Date    Time   CRC-32   Name
+  // --------  ------  ------- ---- ---------- ----- --------  ----
+  //   123456  Defl:N    45678  63% 01-01-1981 01:01 deadbeef  lib/arm64.../libapp.so
+  //  9010112  Stored  9010112   0% 01-01-1981 01:01 b8dc675d  classes4.dex
+  //
+  // Notes:
+  //   • Date is MM-DD-YYYY (not YYYY-MM-DD)
+  //   • Compression ratio can be negative (e.g. -4%)
+  //   • Some filenames may be very long but cp.exec doesn't wrap them
+
+  // Matches: (uncompressed) (method) (compressed) (ratio%) (date) (time) (crc) (name)
+  const lineRe =
+    /^\s*(\d+)\s+\S+\s+(\d+)\s+-?\d+%\s+\d{2}-\d{2}-\d{4}\s+\d{2}:\d{2}\s+[0-9a-f]{8}\s+(.+?)\s*$/i;
+
+  interface FileEntry { compressedBytes: number; name: string; }
+  const entries: FileEntry[] = [];
+
+  for (const line of raw.split('\n')) {
+    const m = line.match(lineRe);
+    if (m) {
+      entries.push({ compressedBytes: parseInt(m[2], 10), name: m[3].trim() });
+    }
+  }
+
+  // Debug: log first 5 lines & entry count
+  console.log("[APK Direct] Raw sample (first 5 lines):\n",
+    raw.split('\n').slice(0, 5).join('\n'));
+  console.log("[APK Direct] Entries parsed:", entries.length);
+
+  if (entries.length === 0) {
+    // Print the first 10 lines for diagnosis
+    const sample = raw.split('\n').slice(0, 10).join('\n');
+    console.error("[APK Direct] Could not parse APK. Raw output sample:\n", sample);
+    throw new Error(
+      "Could not parse any entries from the APK.\n" +
+      "Raw output sample (see Output panel):\n" + sample
+    );
+  }
+
+  // ── 3. Categorise & sum ──────────────────────────────────────────────────
+  let dartCodeBytes = 0;
+  let nativeBytes   = 0;
+  let assetsBytes   = 0;
+  let otherBytes    = 0;
+
+  const allItems: ApkTopItem[] = entries.map(e => {
+    const { label, category } = resolveComponent(path.basename(e.name), e.name);
+    switch (category) {
+      case "Dart":   dartCodeBytes += e.compressedBytes; break;
+      case "Native": nativeBytes   += e.compressedBytes; break;
+      case "Assets": assetsBytes   += e.compressedBytes; break;
+      default:       otherBytes    += e.compressedBytes; break;
+    }
+    return { name: label, sizeBytes: e.compressedBytes, category };
+  });
+
+  // Use actual APK file size as total (= what the user downloads)
+  const totalBytes = fs.statSync(apkPath).size;
+
+  const topItems = allItems
+    .sort((a, b) => b.sizeBytes - a.sizeBytes)
+    .slice(0, 5);
+
+  console.log("[APK Direct] entries parsed:", entries.length);
+  console.log("[APK Direct] Total (file)  :", fmtBytes(totalBytes));
+  console.log("[APK Direct] Dart          :", fmtBytes(dartCodeBytes));
+  console.log("[APK Direct] Native        :", fmtBytes(nativeBytes));
+  console.log("[APK Direct] Assets        :", fmtBytes(assetsBytes));
+  console.log("[APK Direct] Other         :", fmtBytes(otherBytes));
+
+  return {
+    totalBytes,
+    dartCodeBytes,
+    assetsBytes,
+    nativeBytes,
+    otherBytes: Math.max(0, totalBytes - dartCodeBytes - nativeBytes - assetsBytes),
+    topItems,
+    jsonPath: apkPath,   // reuse field to carry the source path
+    buildDate: new Date().toLocaleString(),
+  };
+}
+
 export function activate(context: vscode.ExtensionContext): void {
   // Pass context to the provider (required for asAbsolutePath)
   const provider = new DeadCodeProvider(context);
@@ -286,6 +391,37 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   // APK Size Analysis command
+
+  /** Shared helper: parse a size JSON and open the dashboard. */
+  function showReportFromJson(jsonPath: string): void {
+    try {
+      const { totalBytes, dartCodeBytes, assetsBytes, nativeBytes, otherBytes, root } =
+        parseSizeJson(jsonPath);
+      const topItems = collectTopItems(root, 5);
+      const reportData: ApkReportData = {
+        totalBytes,
+        dartCodeBytes,
+        assetsBytes,
+        nativeBytes,
+        otherBytes,
+        topItems,
+        jsonPath,
+        buildDate: new Date().toLocaleString(),
+      };
+      console.log("[APK Size Analysis] Total :", fmtBytes(totalBytes));
+      console.log("[APK Size Analysis] Dart  :", fmtBytes(dartCodeBytes));
+      console.log("[APK Size Analysis] Assets:", fmtBytes(assetsBytes));
+      console.log("[APK Size Analysis] Native:", fmtBytes(nativeBytes));
+      console.log("[APK Size Analysis] Other :", fmtBytes(otherBytes));
+      console.log("[APK Size Analysis] Top 5 :", topItems.map(i => `${i.name} (${fmtBytes(i.sizeBytes)})`));
+      ApkSizePanel.show(reportData);
+    } catch (parseErr) {
+      vscode.window.showErrorMessage(
+        `APK Size Analysis: failed to parse JSON.\n${String(parseErr)}`
+      );
+    }
+  }
+
   const analyzeApkSizeCommand = vscode.commands.registerCommand(
     "deadCode.analyzeApkSize",
     async () => {
@@ -382,34 +518,82 @@ export function activate(context: vscode.ExtensionContext): void {
           progress.report({ message: "Parsing results…" });
 
           // ── 3. Parse & show dashboard ───────────────────────────────────────
+          showReportFromJson(jsonPath);
+        }
+      );
+    }
+  );
+
+  // ── Load APK directly ─────────────────────────────────────────────────────
+  const loadApkCommand = vscode.commands.registerCommand(
+    "deadCode.loadApk",
+    async () => {
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+
+      // Auto-detect APK files in build/app/outputs/
+      const outputDir = workspaceRoot
+        ? path.join(workspaceRoot, "build", "app", "outputs")
+        : undefined;
+      const existingApks = outputDir
+        ? walkDir(outputDir, (n) => /\.apk$/i.test(n))
+            .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)
+        : [];
+
+      type PickItem = vscode.QuickPickItem & { fsPath?: string };
+      const items: PickItem[] = [
+        ...existingApks.map<PickItem>((fp) => ({
+          label:       `$(package)  ${path.basename(fp)}`,
+          description: path.relative(workspaceRoot ?? "", path.dirname(fp)),
+          detail:      `${fmtBytes(fs.statSync(fp).size)}  ·  Last modified: ${
+            new Date(fs.statSync(fp).mtimeMs).toLocaleString()
+          }`,
+          fsPath: fp,
+        })),
+        {
+          label:       "$(folder-opened)  Browse for APK file…",
+          description: "Select any .apk from your file system",
+        },
+      ];
+
+      const picked = await vscode.window.showQuickPick(items, {
+        title:       "APK Size Analysis — Select APK File",
+        placeHolder: existingApks.length
+          ? "Detected APK files, or browse manually"
+          : "No APK files found — browse manually",
+      });
+      if (!picked) { return; }
+
+      let apkPath: string | undefined;
+      if (picked.fsPath) {
+        apkPath = picked.fsPath;
+      } else {
+        const uris = await vscode.window.showOpenDialog({
+          title:            "Select APK File",
+          canSelectFiles:   true,
+          canSelectFolders: false,
+          canSelectMany:    false,
+          defaultUri:       outputDir ? vscode.Uri.file(outputDir) : undefined,
+          filters:          { "Android APK": ["apk"] },
+          openLabel:        "Analyze",
+        });
+        if (!uris || uris.length === 0) { return; }
+        apkPath = uris[0].fsPath;
+      }
+
+      await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: "APK Size Analysis",
+          cancellable: false,
+        },
+        async (progress) => {
+          progress.report({ message: `Reading ${path.basename(apkPath!)}…` });
           try {
-            const { totalBytes, dartCodeBytes, assetsBytes, nativeBytes, otherBytes, root } =
-              parseSizeJson(jsonPath);
-
-            const topItems = collectTopItems(root, 5);
-
-            const reportData: ApkReportData = {
-              totalBytes,
-              dartCodeBytes,
-              assetsBytes,
-              nativeBytes,
-              otherBytes,
-              topItems,
-              jsonPath,
-              buildDate: new Date().toLocaleString(),
-            };
-
-            console.log("[APK Size Analysis] Total :", fmtBytes(totalBytes));
-            console.log("[APK Size Analysis] Dart  :", fmtBytes(dartCodeBytes));
-            console.log("[APK Size Analysis] Assets:", fmtBytes(assetsBytes));
-            console.log("[APK Size Analysis] Native:", fmtBytes(nativeBytes));
-            console.log("[APK Size Analysis] Other :", fmtBytes(otherBytes));
-            console.log("[APK Size Analysis] Top 5 :", topItems.map(i => `${i.name} (${fmtBytes(i.sizeBytes)})`));
-
+            const reportData = await analyzeApkDirect(apkPath!);
             ApkSizePanel.show(reportData);
-          } catch (parseErr) {
+          } catch (err) {
             vscode.window.showErrorMessage(
-              `APK Size Analysis: failed to parse JSON.\n${String(parseErr)}`
+              `APK Size Analysis: ${String(err)}`
             );
           }
         }
@@ -417,7 +601,13 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   );
 
-  context.subscriptions.push(treeView, refreshCommand, openFileCommand, analyzeApkSizeCommand);
+  context.subscriptions.push(
+    treeView,
+    refreshCommand,
+    openFileCommand,
+    analyzeApkSizeCommand,
+    loadApkCommand,
+  );
 
   console.log("Reduce App Size Flutter extension active.");
 }
