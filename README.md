@@ -1,100 +1,168 @@
-# Flutter Find Unused Resources
+# 🚀 Flutter Find Unused Resources
 
-A Visual Studio Code extension that helps Flutter developers reduce app size and clean up their codebase by detecting unused code, packages, and assets — and providing a detailed breakdown of compiled binary size.
+<div align="center">
 
----
+**Shrink your app. Ship faster. Stay clean.**
 
-## Features
+*The all-in-one VS Code extension for Flutter developers to eliminate dead code and analyze build size — without leaving your editor.*
 
-### Dead Code & Resource Analysis
+[![Version](https://img.shields.io/visual-studio-marketplace/v/FurkanTopaloglu.flutter-find-unused-resources?color=blue&label=VS%20Marketplace&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=FurkanTopaloglu.flutter-find-unused-resources)
+[![Installs](https://img.shields.io/visual-studio-marketplace/i/FurkanTopaloglu.flutter-find-unused-resources?color=green)](https://marketplace.visualstudio.com/items?itemName=FurkanTopaloglu.flutter-find-unused-resources)
+[![Rating](https://img.shields.io/visual-studio-marketplace/r/FurkanTopaloglu.flutter-find-unused-resources?color=yellow)](https://marketplace.visualstudio.com/items?itemName=FurkanTopaloglu.flutter-find-unused-resources)
+[![License: MIT](https://img.shields.io/badge/License-MIT-purple.svg)](https://opensource.org/licenses/MIT)
 
-Open the **Flutter Unused Resources** panel in the Activity Bar and run a full analysis of your Flutter project in one click.
+<img src="images/banner.jpeg" width="100%" alt="Flutter Find Unused Resources — Detect dead code, unused assets, and bloated dependencies." />
 
-| Category | What it finds |
-|---|---|
-| **Unused Classes** | Dart classes declared but never instantiated or referenced anywhere in the project |
-| **Unused Methods** | Functions and methods defined but never called from any part of the codebase |
-| **Unused Packages** | Dependencies listed in `pubspec.yaml` that are never imported in any Dart source file |
-| **Unused Assets** | Images, fonts, and data files registered under `flutter.assets` in `pubspec.yaml` but not referenced in code |
+### ⚡ See it in Action!
+<img src="images/analaysis.gif" width="100%" alt="Flutter Find Unused Resources Demo" />
 
-Results are displayed in a navigable tree view. Clicking a class, method, or asset entry jumps directly to the relevant file and line.
-
-### APK / IPA Size Breakdown
-
-Load a compiled `.apk` or `.ipa` file to get a visual dashboard showing:
-
-- **Total binary size** with a per-category summary
-- **Donut chart** breaking down Dart AOT snapshot, Flutter engine, native libraries, assets, and other components
-- **Top components list** sorted by size so you know exactly where to focus optimization efforts
+</div>
 
 ---
 
-## Requirements
+## ✨ Why Flutter Find Unused Resources?
 
-- **VS Code** `1.85.0` or later
-- **Dart SDK** installed and available on your `PATH` (the extension runs the bundled analysis tool via `dart run`)
-- The opened workspace must be a **Flutter project** containing a `lib/` directory and `pubspec.yaml`
+Every Flutter project accumulates technical debt over time — forgotten assets, abandoned classes, deprecated methods, and unused packages quietly bloat your app's size and slow down your team. **Flutter Find Unused Resources** gives you X-ray vision into your codebase and your builds, so you can cut the fat and deliver a leaner, faster app to your users.
 
----
-
-## Usage
-
-### Running the analysis
-
-1. Open your Flutter project folder in VS Code.
-2. Click the **Flutter Unused Resources** icon in the Activity Bar (left sidebar).
-3. Press **Start Analysis** in the welcome panel.
-4. Wait a few seconds while the project is scanned.
-5. Browse the results grouped by category — unused classes, methods, packages, and assets.
-6. Click any item to navigate directly to the source location.
-7. Use the **refresh** button in the panel title bar to clear results and start over.
-
-### APK / IPA size breakdown
-
-1. In the same sidebar panel, click **Load APK File** or **Load IPA File**.
-2. Select a compiled `.apk` (Android) or `.ipa` (iOS) file from your machine.
-3. The **App Size Report** tab opens with an interactive chart and a ranked list of the largest components.
-
-> **Tip:** Re-run the analysis after every major refactor. Even small removals can noticeably reduce your app's install size and improve user acquisition.
+> ⚡ No more guessing. No more manual searches. Just clean, optimized Flutter code.
 
 ---
 
-## How it works
+## 🎯 Features
 
-The extension bundles a Dart CLI tool (`dart_cli/`) that is executed against your project when analysis is triggered.
+### 🧹 Source Code Cleanup
 
-1. **Dart source files** under `lib/` are parsed using the official [`analyzer`](https://pub.dev/packages/analyzer) package.
-2. A **reference graph** is built by collecting all identifier usages across the entire codebase.
-3. **Unused classes and methods** are identified by comparing declaration counts to usage counts — any symbol that appears only at its declaration site is flagged.
-4. **Unused packages** are detected by cross-referencing `pubspec.yaml` dependencies against `import` statements in all Dart files.
-5. **Unused assets** are detected by cross-referencing `pubspec.yaml` asset declarations against string literals in all Dart files. Font files and `.env` files are automatically excluded from this check since they are not referenced by path in code.
-6. The CLI outputs a JSON report which the extension parses and renders as a tree view.
+Automatically detect dead code lurking in your Flutter project — all from a dedicated panel inside VS Code.
 
-For APK/IPA analysis, the extension reads the archive directly (no Flutter build required) and maps file paths to known component labels (Dart AOT snapshot, Flutter engine, DEX shards, native plugins, etc.).
+- 🔍 **Unused Classes** — Instantly find classes defined but never referenced anywhere in your project.
+- 🔧 **Unused Methods** — Surface methods that are declared but never called.
+- 📦 **Unused Packages** — Identify `pubspec.yaml` dependencies you're importing but not actually using.
+- 🖼️ **Unused Assets** — Spot image, font, and file assets declared in `pubspec.yaml` that no code ever loads.
+- 🖱️ **Click-to-Navigate** — Click any detected issue in the tree view to instantly jump to the exact file and line — no manual searching required.
+- ⚡ **Powered by Dart CLI** — Analysis runs via a robust background Dart CLI tool, delivering accurate, project-wide results without slowing down your editor.
 
----
-
-## Known Limitations
-
-- The unused **class and method** detection is based on static identifier matching, not full semantic analysis. Symbols referenced only via reflection, `isolate`, or generated code may be incorrectly flagged.
-- **Font assets** are always considered used because they are referenced by family name at runtime, not by file path. `.env` files are similarly excluded.
-- The extension analyzes only the first workspace folder when multiple folders are open.
 
 ---
 
-## Extension Commands
+### 📊 Build Size Analysis
 
-| Command | Description |
-|---|---|
-| `Flutter Find Unused Resources: Run Analysis` | Start a full project scan |
-| `Flutter Find Unused Resources: Clear Results` | Reset the view back to the welcome screen |
-| `Load APK File` | Open an APK file for size analysis |
-| `Load IPA File` | Open an IPA file for size analysis |
+Stop wondering what's eating your app's megabytes. Analyze your existing **APK** or **IPA** file in seconds — no rebuild needed.
+
+- 📂 **Zero Rebuild Required** — Point the extension at an already-built `.apk` or `.ipa` file and get instant insights.
+- 🎯 **Smart File Picker** — The built-in file picker filters exclusively for `.apk` and `.ipa` extensions so you always load the right file.
+- 🥧 **Animated Pie Chart** — A gorgeous, Chart.js-powered interactive pie chart breaks down your app's composition by category:
+  - 🎨 Assets
+  - ⚙️ Native Code
+  - 🎯 Dart Code
+  - ...and more
+- 🏆 **Top 5 Heaviest Files** — A detailed table highlights the five largest contributors to your build size, so you know exactly where to focus your optimization efforts.
+- 🖥️ **Beautiful Dashboard** — Results are presented in a sleek Webview Panel dashboard directly inside VS Code — no browser, no external tools.
+
+<img src="images/dashboard.png" width="100%" alt="APK/IPA Size Analysis Dashboard" />
 
 ---
 
-## Release Notes
+## 🛠️ How to Use
 
-### 0.0.1
+### Source Code Cleanup
 
-Initial release.
+1. **Open your Flutter project** in VS Code.
+2. **Click the Flutter Find Unused Resources icon** in the Activity Bar on the left sidebar.
+3. **Click "Analyze Project"** to start the background Dart CLI scan.
+4. Browse the results in the **TreeView panel**, organized by category (Classes, Methods, Packages, Assets).
+5. **Click any item** in the list to open the file and jump directly to the relevant line.
+6. Clean up with confidence! 🎉
+
+### Build Size Analysis
+
+1. **Build your Flutter app** first with `flutter build apk` or `flutter build ipa` (or use an existing build).
+2. Click the **Flutter Find Unused Resources icon** in the Activity Bar.
+3. Click **"Load APK File"** or **"Load IPA File"** depending on your target platform.
+4. Select your build file using the file picker — only `.apk` / `.ipa` files will be shown.
+5. The **Dashboard** will open automatically, displaying:
+   - An animated pie chart of your app's size composition.
+   - A table of the **Top 5 Heaviest Files** by size.
+6. Use the insights to prioritize your optimization work! 📉
+
+---
+
+## 📋 Requirements
+
+Before using this extension, make sure you have the following installed:
+
+| Requirement | Version | Notes |
+|---|---|---|
+| **VS Code** | `^1.85.0` | Minimum supported version |
+| **Flutter SDK** | `>=3.0.0` | Must be available in your `PATH` |
+| **Dart SDK** | `>=3.0.0` | Bundled with Flutter SDK |
+
+> 💡 **Tip:** Run `flutter doctor` in your terminal to verify your Flutter environment is set up correctly before using this extension.
+
+---
+
+## 🚀 Getting Started
+
+Install the extension directly from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=FurkanTopaloglu.flutter-find-unused-resources):
+
+```bash
+# Via VS Code Quick Open (Ctrl+P / Cmd+P)
+ext install FurkanTopaloglu.flutter-find-unused-resources
+```
+
+Or search for **"Flutter Find Unused Resources"** in the Extensions panel (`Ctrl+Shift+X` / `Cmd+Shift+X`).
+
+---
+
+## 💬 Feedback & Issues
+
+Found a bug? Have a feature request? We'd love to hear from you!
+
+- 🐛 **Report a Bug** → [Open an Issue](https://github.com/FurkanTopaloglu/find-unused-resources/issues/new?template=bug_report.md)
+- 💡 **Request a Feature** → [Start a Discussion](https://github.com/FurkanTopaloglu/find-unused-resources/discussions)
+- ⭐ **Enjoying the extension?** Please consider leaving a [review on the Marketplace](https://marketplace.visualstudio.com/items?itemName=FurkanTopaloglu.flutter-find-unused-resources&ssr=false#review-details) — it helps other Flutter developers discover this tool!
+
+---
+
+## 🗺️ Roadmap
+
+- [ ] Auto-fix support (one-click removal of unused assets and packages)
+- [ ] Android App Bundle (`.aab`) analysis support
+- [ ] Historical build size comparison (track size over time)
+- [ ] CI/CD integration via CLI flags
+- [ ] Severity levels and custom ignore rules
+
+---
+
+## 📄 License
+
+This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+
+```
+MIT License
+
+Copyright (c) 2026 Flutter Find Unused Resources Contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+```
+
+---
+
+<div align="center">
+
+Made with ❤️ for the Flutter community
+
+**[⬆ Back to Top](#-flutter-find-unused-resources)**
+
+</div>
