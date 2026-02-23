@@ -33,7 +33,10 @@ class MethodCollector extends RecursiveAstVisitor<void> {
   @override
   void visitMethodDeclaration(MethodDeclaration node) {
     final name = node.name.lexeme;
-    if (!_excluded.contains(name)) {
+    final isOverride = node.metadata.any(
+      (a) => a.name.name == 'override',
+    );
+    if (!_excluded.contains(name) && !isOverride) {
       final line = lineInfo.getLocation(node.name.offset).lineNumber;
       methods.add(MethodInfo(name: name, filePath: filePath, line: line));
     }
