@@ -1,0 +1,37 @@
+name: Dart CLI CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'dart_cli/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'dart_cli/**'
+
+jobs:
+  analyze:
+    name: Dart Analyze
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Dart
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Install dependencies
+        working-directory: dart_cli
+        run: dart pub get
+
+      - name: Analyze
+        working-directory: dart_cli
+        run: dart analyze --fatal-infos
+
+      - name: Compile (verify no build errors)
+        working-directory: dart_cli
+        run: dart compile exe bin/main.dart -o /dev/null

@@ -1,6 +1,3 @@
-/// Public API of the reduce_app_size_flutter_cli package.
-library reduce_app_size_flutter_cli;
-
 export 'src/analyzers/unused_asset_analyzer.dart';
 export 'src/analyzers/unused_package_analyzer.dart';
 export 'src/app_analyzer.dart';
