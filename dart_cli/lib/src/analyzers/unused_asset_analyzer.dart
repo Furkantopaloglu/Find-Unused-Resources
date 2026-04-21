@@ -75,9 +75,8 @@ Future<List<Map<String, Object>>> findUnusedAssets(
       if (dir.existsSync()) {
         await for (final entity in dir.list(recursive: false)) {
           if (entity is File) {
-            final relativePath = p
-                .relative(entity.path, from: rootPath)
-                .replaceAll('\\', '/');
+            final relativePath =
+                p.relative(entity.path, from: rootPath).replaceAll('\\', '/');
             if (!isAlwaysUsed(relativePath)) {
               declaredAssets.add(relativePath);
             }
