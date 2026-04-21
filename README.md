@@ -125,10 +125,10 @@ Found a bug? Have a feature request? We'd love to hear from you!
 
 ## 🗺️ Roadmap
 
-- [ ] Auto-fix support (one-click removal of unused assets and packages)
+- [x] Auto-fix support (one-click removal of unused assets and packages)
 - [ ] Android App Bundle (`.aab`) analysis support
 - [ ] Historical build size comparison (track size over time)
-- [ ] CI/CD integration via CLI flags
+- [x] CI/CD integration via CLI flags
 - [ ] Severity levels and custom ignore rules
 
 ---

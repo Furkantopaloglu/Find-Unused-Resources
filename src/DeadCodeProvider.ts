@@ -58,6 +58,160 @@ export class DeadCodeProvider
   }
 
   /**
+   * Starting from `startIdx`, find the end line of a Dart class or method.
+   * Supports both brace-block bodies (`{ … }`) and arrow expressions (`=> …;`).
+   */
+  private _findClosingBrace(lines: string[], startIdx: number): number {
+    // First, scan forward to determine if this is an arrow function or a brace block.
+    // Concatenate lines until we find either `{` or `=>` to decide.
+    let depth = 0;
+    let foundOpen = false;
+
+    for (let i = startIdx; i < lines.length; i++) {
+      const line = lines[i];
+
+      // Check for arrow syntax before any opening brace is found
+      if (!foundOpen) {
+        const bracePos = line.indexOf("{");
+        const arrowPos = line.indexOf("=>");
+        // Arrow function detected (=> appears and there's no { before it on this line)
+        if (arrowPos !== -1 && (bracePos === -1 || arrowPos < bracePos)) {
+          // Arrow function: find the terminating semicolon
+          for (let j = i; j < lines.length; j++) {
+            if (lines[j].includes(";")) { return j; }
+          }
+          return i;
+        }
+      }
+
+      for (const ch of line) {
+        if (ch === "{") { depth++; foundOpen = true; }
+        else if (ch === "}") { depth--; }
+        if (foundOpen && depth === 0) { return i; }
+      }
+    }
+    // Fallback: if no matching brace found, return just the start line
+    return startIdx;
+  }
+
+  /**
+   * Removes a single unused item from the internal results and, where safe,
+   * deletes it from the project (asset file or pubspec dependency line).
+   */
+  async deleteItem(treeItem: DeadCodeTreeItem): Promise<void> {
+    const { kind, label, file, line } = treeItem.data;
+
+    if (kind === "asset") {
+      // Delete the asset file from disk
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
+      const assetPath = treeItem.data.description ?? treeItem.data.file ?? "";
+      const absPath = path.isAbsolute(assetPath) ? assetPath : path.join(workspaceRoot, assetPath);
+
+      const confirm = await vscode.window.showWarningMessage(
+        `Delete asset file "${path.basename(absPath)}"?`,
+        { modal: true },
+        "Delete"
+      );
+      if (confirm !== "Delete") { return; }
+
+      try {
+        if (fs.existsSync(absPath)) { fs.unlinkSync(absPath); }
+      } catch (err) {
+        vscode.window.showErrorMessage(`Could not delete file: ${String(err)}`);
+        return;
+      }
+      this._result.unused_assets = this._result.unused_assets.filter(
+        (a) => a.path !== assetPath
+      );
+    } else if (kind === "package") {
+      // Remove the dependency line from pubspec.yaml
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
+      const pubspecPath = path.join(workspaceRoot, "pubspec.yaml");
+
+      const confirm = await vscode.window.showWarningMessage(
+        `Remove package "${label}" from pubspec.yaml?`,
+        { modal: true },
+        "Remove"
+      );
+      if (confirm !== "Remove") { return; }
+
+      try {
+        if (fs.existsSync(pubspecPath)) {
+          const content = fs.readFileSync(pubspecPath, "utf-8");
+          const lines = content.split("\n");
+          // Remove the line that declares this dependency (e.g. "  package_name: ^1.0.0")
+          const regex = new RegExp(`^\\s+${label}\\s*:`);
+          const filtered = lines.filter((l) => !regex.test(l));
+          fs.writeFileSync(pubspecPath, filtered.join("\n"), "utf-8");
+        }
+      } catch (err) {
+        vscode.window.showErrorMessage(`Could not update pubspec.yaml: ${String(err)}`);
+        return;
+      }
+      this._result.unused_packages = this._result.unused_packages.filter(
+        (p) => p.name !== label
+      );
+    } else if (kind === "class") {
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
+      const absPath = file ? (path.isAbsolute(file) ? file : path.join(workspaceRoot, file)) : "";
+
+      const confirm = await vscode.window.showWarningMessage(
+        `Delete class "${label}" from source file?`,
+        { modal: true },
+        "Delete"
+      );
+      if (confirm !== "Delete") { return; }
+
+      try {
+        if (absPath && fs.existsSync(absPath)) {
+          const content = fs.readFileSync(absPath, "utf-8");
+          const lines = content.split("\n");
+          const startIdx = (line ?? 1) - 1; // 0-based
+          const endIdx = this._findClosingBrace(lines, startIdx);
+          // Also remove leading blank lines after deletion
+          lines.splice(startIdx, endIdx - startIdx + 1);
+          fs.writeFileSync(absPath, lines.join("\n"), "utf-8");
+        }
+      } catch (err) {
+        vscode.window.showErrorMessage(`Could not delete class: ${String(err)}`);
+        return;
+      }
+      this._result.unused_classes = this._result.unused_classes.filter(
+        (c) => !(c.name === label && c.file === file && c.line === line)
+      );
+    } else if (kind === "method") {
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? "";
+      const absPath = file ? (path.isAbsolute(file) ? file : path.join(workspaceRoot, file)) : "";
+
+      const confirm = await vscode.window.showWarningMessage(
+        `Delete method "${label}" from source file?`,
+        { modal: true },
+        "Delete"
+      );
+      if (confirm !== "Delete") { return; }
+
+      try {
+        if (absPath && fs.existsSync(absPath)) {
+          const content = fs.readFileSync(absPath, "utf-8");
+          const lines = content.split("\n");
+          const startIdx = (line ?? 1) - 1; // 0-based
+          const endIdx = this._findClosingBrace(lines, startIdx);
+          lines.splice(startIdx, endIdx - startIdx + 1);
+          fs.writeFileSync(absPath, lines.join("\n"), "utf-8");
+        }
+      } catch (err) {
+        vscode.window.showErrorMessage(`Could not delete method: ${String(err)}`);
+        return;
+      }
+      this._result.unused_methods = this._result.unused_methods.filter(
+        (m) => !(m.name === label && m.file === file && m.line === line)
+      );
+    }
+
+    this._onDidChangeTreeData.fire();
+  }
+
+  /**
    * Runs the Dart CLI tool, parses the result, and updates the view.
    * Called by the `deadCodeView.refresh` command (Start Analysis button).
    */

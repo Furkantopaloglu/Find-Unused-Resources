@@ -449,6 +449,12 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   );
 
+  // Delete item command — inline trash icon on tree items
+  const deleteItemCommand = vscode.commands.registerCommand(
+    "deadCode.deleteItem",
+    (treeItem: any) => provider.deleteItem(treeItem)
+  );
+
   // ── Load APK directly ─────────────────────────────────────────────────────
   const loadApkCommand = vscode.commands.registerCommand(
     "deadCode.loadApk",
@@ -567,6 +573,7 @@ export function activate(context: vscode.ExtensionContext): void {
     refreshCommand,
     resetCommand,
     openFileCommand,
+    deleteItemCommand,
     loadApkCommand,
     loadIpaCommand,
   );

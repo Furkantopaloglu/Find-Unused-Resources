@@ -2,24 +2,22 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   pull_request:
-    branches: [main]
+    branches: [main, master]
 
 jobs:
-  build:
-    name: Build & Lint (Node.js)
+  build-extension:
+    name: Build VS Code Extension
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: 20
+          cache: npm
 
       - name: Install dependencies
         run: npm ci
@@ -27,5 +25,34 @@ jobs:
       - name: Compile TypeScript
         run: npm run compile
 
-      - name: Package extension (dry-run)
-        run: npx vsce package --no-dependencies
+      - name: Package extension (dry run)
+        run: npx @vscode/vsce package --no-git-tag-version
+
+      - name: Upload VSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vsix-package
+          path: "*.vsix"
+
+  build-dart-cli:
+    name: Build Dart CLI
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dart_cli
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Dart SDK
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: "3.5.0"
+
+      - name: Install dependencies
+        run: dart pub get
+
+      - name: Analyze
+        run: dart analyze --fatal-infos
+
+      - name: Format check
+        run: dart format --set-exit-if-changed .

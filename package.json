@@ -2,7 +2,7 @@
   "name": "flutter-find-unused-resources",
   "displayName": "Flutter Find Unused Resources",
   "description": "Detect unused classes, methods, packages and assets in your Flutter project. Reduce APK/IPA size with a built-in binary size breakdown panel.",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "publisher": "furkanTopaloglu",
   "license": "MIT",
   "icon": "resources/icon.png",
@@ -77,6 +77,11 @@
         "command": "deadCode.loadIpaFile",
         "title": "Load IPA File",
         "icon": "$(device-mobile)"
+      },
+      {
+        "command": "deadCode.deleteItem",
+        "title": "Delete Unused Item",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
@@ -85,6 +90,13 @@
           "command": "deadCodeView.reset",
           "when": "view == deadCodeView && reduceAppSize.state == done",
           "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "deadCode.deleteItem",
+          "when": "view == deadCodeView && viewItem =~ /^(class|method|package|asset)$/",
+          "group": "inline"
         }
       ]
     },
@@ -108,8 +120,9 @@
     "pretest": "npm run compile"
   },
   "devDependencies": {
-    "@types/vscode": "^1.85.0",
     "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.9.1",
     "typescript": "^5.3.0"
   }
 }
